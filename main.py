@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import StaleElementReferenceException
 
 # Function to recognize speech input from microphone
 def recognize_speech_from_mic():
@@ -95,22 +96,24 @@ def is_login_successful(driver):
 
 # Function to handle post-login interactions
 def post_login_interaction(driver):
-    speak_text("Would you like to send an email or view emails?")
-    command = recognize_speech_from_mic()
-    if command:
-        if "send" in command.lower():
-            speak_text("You chose to send an email. Redirecting you to the compose page.")
-            driver.get("http://localhost:5173/compose")
-            time.sleep(2)  # Wait for the page to load
-            send_email(driver)
-        elif "view" in command.lower():
-            speak_text("You chose to view emails. Redirecting you to the inbox.")
-            driver.get("http://localhost:5173/home")
-            time.sleep(2)  # Wait for the page to load
-            view_emails(driver)
+    while True:
+        speak_text("Would you like to send an email or view emails?")
+        command = recognize_speech_from_mic()
+        if command:
+            if "send" in command.lower():
+                speak_text("You chose to send an email. Redirecting you to the compose page.")
+                driver.get("http://localhost:5173/compose")
+                time.sleep(2)
+                send_email(driver)
+            elif "view" in command.lower():
+                speak_text("You chose to view emails. Redirecting you to the inbox.")
+                driver.get("http://localhost:5173/home")
+                time.sleep(2)
+                view_emails(driver)
+            else:
+                speak_text("I didn't understand that. Please say 'send' to send an email or 'view' to view emails.")
         else:
             speak_text("I didn't understand that. Please say 'send' to send an email or 'view' to view emails.")
-            post_login_interaction(driver)  # Ask again
 
 # Function to handle sending an email
 def send_email(driver):
@@ -149,35 +152,14 @@ def send_email(driver):
 
     # Send the email
     try:
-        send_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+        speak_text("Sending Email.")
+        send_button = driver.find_element(By.ID, "send")
         send_button.click()
+        time.sleep(15)
         speak_text("Email sent successfully.")
-        
-        # Wait for a response indicating email sent successfully
-        wait_for_email_response(driver)
-        
     except Exception as e:
         print(f"Error: {e}")
         speak_text("Error encountered while sending email.")
-
-def wait_for_email_response(driver):
-    speak_text("Waiting for response...")
-    # Example: You can check for a success message or element indicating the email was sent successfully
-    # In this example, let's wait for a few seconds as a placeholder
-    time.sleep(5)
-
-    speak_text("What would you like to do next? Say 'send' to send another email or 'view' to view emails.")
-    command = recognize_speech_from_mic()
-    if command:
-        if "send" in command.lower():
-            # **Modification here** - No redirection, user stays on the compose page
-            speak_text("You chose to send another email.")
-        elif "view" in command.lower():
-            speak_text("You chose to view emails. Redirecting you to the inbox.")
-            driver.get("http://localhost:5173/home")
-        else:
-            speak_text("I didn't understand that. Please say 'send' to send another email or 'view' to view emails.")
-            wait_for_email_response(driver)
 
 # Function to get spelling input, trim out spaces, and confirm input
 def get_and_confirm_input(field_name):
@@ -218,27 +200,6 @@ def get_input_phrase(field_name):
             else:
                 speak_text(f"Let's try again. Please say your {field_name}.")
 
-def parse_email_number_from_word(text):
-    # Define a mapping of text numbers to numeric values
-    text_to_number = {
-        "first": 1,
-        "second": 2,
-        "third": 3,
-        "four": 4,
-        "five": 5,
-        "six": 6,
-        "seven": 7,
-        "eigh": 8,
-        "nine": 9,
-        "ten": 10
-        # Add more mappings as needed
-    }
-
-    # Convert the text to lowercase to handle case insensitivity
-    text = text.lower().strip()
-    
-    # Return the corresponding number if found in the mapping, otherwise None
-    return text_to_number.get(text, None)
 def view_emails(driver):
     try:
         WebDriverWait(driver, 30).until(
@@ -266,8 +227,12 @@ def view_emails(driver):
             
             user_response = recognize_speech_from_mic()
             if user_response and 'yes' in user_response.lower():
-                # Read out the content if user says 'yes'
-                speak_text(f"Content {content}")
+                try:
+                    # Read out the content if user says 'yes'
+                    speak_text(f"Content {content}")
+                except StaleElementReferenceException:
+                    speak_text("Error encountered while reading email content. The email might have been removed or updated.")
+                    break
             else:
                 # Skip to the next email if user says 'no'
                 speak_text("Skipping to the next email.")
@@ -279,48 +244,7 @@ def view_emails(driver):
         if not continue_response or 'yes' not in continue_response.lower():
             speak_text("Exiting email reading.")
             break
-def read_email_content(driver):
-    try:
-        # Wait for the modal to appear
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".fixed .bg-white"))
-        )
-        speak_text("Reading the email content.")
-        
-        # Extract email details
-        from_text = driver.find_element(By.CSS_SELECTOR, ".bg-white .font-bold + span").text
-        subject_text = driver.find_element(By.CSS_SELECTOR, ".bg-white .font-bold + span + div + span + span").text
-        content_text = driver.find_element(By.CSS_SELECTOR, ".bg-white .font-bold + span + div + div").text
 
-        # Read the email content aloud
-        speak_text(f"From: {from_text}")
-        speak_text(f"Subject: {subject_text}")
-        speak_text(f"Content: {content_text}")
-        
-        # Inform the user that reading is done
-        speak_text("Done reading the email. Closing the email view.")
-        
-        # Close the modal
-        close_button = driver.find_element(By.CSS_SELECTOR, ".bg-white button")
-        close_button.click()
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        speak_text("Error encountered while reading the email content.")
-
-# Function to parse the email number from the recognized speech command
-def parse_email_number(command):
-    words_to_numbers = {
-        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
-    }
-    for word, number in words_to_numbers.items():
-        if word in command.lower():
-            return number
-    try:
-        return int(command.strip())
-    except ValueError:
-        return None
 
 # Main function to start the interaction
 def main():
