@@ -249,51 +249,36 @@ def view_emails(driver):
         speak_text("Error encountered while loading emails.")
         return
 
-    emails = driver.find_elements(By.CSS_SELECTOR, "tbody tr")
-    for index, email in enumerate(emails):
-        email_id = index + 1
-        email_from = email.find_element(By.CSS_SELECTOR, "td:nth-child(2)").text
-        email_subject = email.find_element(By.CSS_SELECTOR, "td:nth-child(3)").text
-        content = email.find_element(By.CSS_SELECTOR, "td:nth-child(4)").text
-        speak_text(f"Email {email_id}: From {email_from}, Subject {email_subject},Content {content}")
-
-    speak_text("Please say the email number you want to open.")
-
     while True:
-        email_number_text = recognize_speech_from_mic()
+        emails = driver.find_elements(By.CSS_SELECTOR, "tbody tr")
+        if not emails:
+            speak_text("No emails found.")
+            break
         
-        if email_number_text:
-            print(f"Recognized Email Number Text: {email_number_text}")
-            email_number = parse_email_number_from_word(email_number_text)  # Convert text to number
+        for index, email in enumerate(emails):
+            email_id = index + 1
+            email_from = email.find_element(By.CSS_SELECTOR, "td:nth-child(2)").text
+            email_subject = email.find_element(By.CSS_SELECTOR, "td:nth-child(3)").text
+            content = email.find_element(By.CSS_SELECTOR, "td:nth-child(4)").text
             
-            if email_number and 1 <= email_number <= len(emails):
-                try:
-                    # Re-fetch email elements to avoid stale reference
-                    emails = driver.find_elements(By.CSS_SELECTOR, "tbody tr")
-                    email_to_open = emails[email_number - 1]
-                    subject_link = email_to_open.find_element(By.CSS_SELECTOR, "td:nth-child(2) a")
-
-                    # Provide feedback before clicking
-                    speak_text(f"Clicking email number {email_number}.")
-                    
-                    subject_link.click()
-                    
-                    # Wait for the email details to load
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.ID, "email-content"))
-                    )
-                    
-                    # Read out email details
-                    email_details = driver.find_element(By.ID, "email-content")
-                    speak_text(f"Email details: {email_details.text}")
-                    break  # Exit the loop after successful action
-                except Exception as e:
-                    print(f"Error: {e}")
-                    speak_text("Error encountered while opening the email.")
+            # Prompt the user if they want the content read aloud
+            speak_text(f"Email {email_id}: From {email_from}, Subject {email_subject}. Do you want to read the content?")
+            
+            user_response = recognize_speech_from_mic()
+            if user_response and 'yes' in user_response.lower():
+                # Read out the content if user says 'yes'
+                speak_text(f"Content {content}")
             else:
-                speak_text(f"Invalid email number. Please choose a number between 1 and {len(emails)}.")
-        else:
-            speak_text("I didn't understand that. Please try again.")
+                # Skip to the next email if user says 'no'
+                speak_text("Skipping to the next email.")
+                continue
+        
+        # Ask the user if they want to read more emails
+        speak_text("Do you want to read more emails? Say 'yes' to continue or 'no' to stop.")
+        continue_response = recognize_speech_from_mic()
+        if not continue_response or 'yes' not in continue_response.lower():
+            speak_text("Exiting email reading.")
+            break
 def read_email_content(driver):
     try:
         # Wait for the modal to appear
